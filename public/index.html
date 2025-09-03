@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Presensi Kelas</title>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa;
+        padding-top: 50px;
+      }
+      table {
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: center;
+        vertical-align: middle;
+      }
+      .img-thumbnail {
+        height: 250px;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="text-center mb-4">Presensi Kelas</h1>
+
+      <table class="table table-bordered table-striped">
+        <thead class="thead-dark">
+          <tr>
+            <th>No</th>
+            <th>Nama</th>
+            <th>NRP</th>
+            <!-- <th>Pesan</th> -->
+            <th>Foto</th>
+            <th>AKSI</th>
+          </tr>
+        </thead>
+        <tbody id="presensi-list">
+          <!-- Data presensi akan dimasukkan di sini -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal untuk menampilkan gambar besar -->
+    <div
+      class="modal fade"
+      id="imageModal"
+      tabindex="-1"
+      aria-labelledby="imageModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="imageModalLabel">Gambar Presensi</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <img
+              id="modalImage"
+              class="img-fluid"
+              src=""
+              alt="Gambar Presensi"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+    <script>
+      fetch("http://localhost:3000/presensi")
+        .then((response) => response.json())
+        .then((data) => {
+          const presensiList = document.getElementById("presensi-list");
+          data.forEach((presensi, index) => {
+            console.log("cek", presensi.message_text.split(" ")[1]);
+            const presensiRow = document.createElement("tr");
+            presensiRow.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${presensi?.student_name || ""}</td>
+            <td>${presensi?.student_nrp?.split(" ")?.[0] || ""}</td>
+            
+            <td>
+              ${
+                presensi.image_url
+                  ? `<img src="http://localhost:3000${presensi.image_url}" class="img-thumbnail" alt="Gambar Presensi" onclick="showImageModal('http://localhost:3000${presensi.image_url}')"`
+                  : "Tidak ada gambar"
+              }
+            </td>
+             <td>
+              <button class="btn btn-danger btn-sm" onclick="deletePresensi(${
+                presensi.id
+              }, this)">Hapus</button>
+            </td>
+          `;
+            presensiList.appendChild(presensiRow);
+          });
+        })
+        .catch((err) => console.error("Error fetching data: ", err));
+
+      function showImageModal(imageUrl) {
+        const modalImage = document.getElementById("modalImage");
+        modalImage.src = imageUrl;
+        const myModal = new bootstrap.Modal(
+          document.getElementById("imageModal")
+        );
+        myModal.show();
+      }
+
+      function deletePresensi(id, button) {
+        // Mengonfirmasi penghapusan data
+        if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+          // Mengirim permintaan DELETE ke server
+          fetch(`http://localhost:3000/presensi/${id}`, { method: "DELETE" })
+            .then((response) => {
+              if (response.ok) {
+                // Menghapus baris data di tabel setelah berhasil dihapus
+                button.closest("tr").remove();
+                alert("Data berhasil dihapus");
+              } else {
+                alert("Gagal menghapus data");
+              }
+            })
+            .catch((err) => console.error("Error deleting data: ", err));
+        }
+      }
+    </script>
+  </body>
+</html>

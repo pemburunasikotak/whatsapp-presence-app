@@ -1,0 +1,5 @@
+#untuk menjalankan 
+
+1. install node module => npm install 
+2. jalankan file bot.js => node src/bot.js
+3. jalankan server dan jalankan client => npm run dev-all
