@@ -1,215 +1,236 @@
-// const { Client, LocalAuth } = require("whatsapp-web.js");
-// const qrcode = require("qrcode-terminal");
-// const fs = require("fs");
-// const path = require("path");
-// const { savePresensiData } = require("../config/db"); // Fungsi untuk menyimpan data ke DB
-// const cron = require("node-cron");
-
-// // Inisialisasi WhatsApp Client
-// const client = new Client({
-//   authStrategy: new LocalAuth(), // Menyimpan sesi agar tidak perlu login ulang
-// });
-
-// // Menampilkan QR Code di terminal untuk login
-// client.on("qr", (qr) => {
-//   qrcode.generate(qr, { small: true });
-// });
-
-// // Setelah client siap
-// client.on("ready", () => {
-//   console.log("Client is ready!");
-// });
-
-// // Mengambil pesan dan gambar
-// client.on("ready", () => {
-//   console.log("Client is ready!");
-
-//   // Mendapatkan daftar grup dan mencari grup "KELAS_1"
-//   client.getChats().then((chats) => {
-//     // Filter hanya grup
-//     const groups = chats.filter((chat) => chat.isGroup);
-
-//     // Mencari grup dengan nama "KELAS_1"
-//     const targetGroup = groups.find((group) => group.name === "KELAS_1");
-
-//     if (targetGroup) {
-//       console.log(
-//         `Grup ditemukan: ${targetGroup.name}, ID Grup: ${targetGroup.id._serialized}`
-//       );
-
-//       // Menangani pesan yang datang ke grup "KELAS_1"
-//       client.on("message", async (message) => {
-//         // Memeriksa apakah pesan berasal dari grup yang tepat
-//         // console.log("CEK LOG", message);
-//         const senderPhoneNumber = message.from.split("@")[0];
-//         console.log("SENDER", senderPhoneNumber);
-//         if (message.from === targetGroup.id._serialized) {
-//           console.log(
-//             `Pesan diterima di grup ${targetGroup.name}: ${message.body}`
-//           );
-
-//           // Menangani pesan gambar atau file
-//           const senderId = message.from.split("@")[0];
-//           const contact = await client.getContactById(senderId);
-//           const senderPhoneNumber = contact.number; // Nomor telepon pengirim
-
-//           console.log(`Nomor Telepon Pengirim: ${senderPhoneNumber}`);
-
-//           const regex = /^(\d+)\s(.+)$/;
-//           const match = message.body.match(regex);
-//           console.log("MATCH", match, match[2]);
-//           console.log("MATCH2", message.body, targetGroup.name);
-
-//           let filePath = null;
-//           if (message.hasMedia) {
-//             const media = await message.downloadMedia();
-//             filePath = path.join(
-//               __dirname,
-//               "../data/images",
-//               `${match[1]}_${match[2]}.jpg`
-//             );
-
-//             // Menyimpan gambar ke folder 'data/images'
-//             fs.writeFileSync(filePath, media.data, "base64");
-//             console.log(`Gambar disimpan di: ${filePath}`);
-//           }
-
-//           // Menyimpan data presensi (termasuk teks dan gambar)
-//           savePresensiData(message.from, message.body, filePath);
-//         }
-//       });
-//     } else {
-//       console.log('Grup "KELAS_1" tidak ditemukan.');
-//     }
-//   });
-// });
-
-// // Reset data setiap hari pada pukul 00:00
-// cron.schedule("0 0 * * *", () => {
-//   console.log("Resetting presensi data...");
-
-//   db.run("DELETE FROM presensi", (err) => {
-//     if (err) {
-//       console.error("Error resetting database:", err);
-//     } else {
-//       console.log("Data presensi berhasil direset.");
-//     }
-//   });
-// });
-
-// // Mulai client
-// client.initialize();
-
-
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
-const { savePresensiData } = require("../config/db");
+const { savePresensiData, resetPresensiData } = require("../config/db");
 const cron = require("node-cron");
+const Jimp = require("jimp-compact");
 
 // Inisialisasi WhatsApp Client
 const client = new Client({
-  authStrategy: new LocalAuth(), // Menyimpan sesi agar tidak perlu login ulang
+  authStrategy: new LocalAuth(), // simpan sesi login
 });
 
-// Menampilkan QR Code di terminal untuk login
+// QR Code untuk login
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
-// Setelah client siap
+// Saat client siap
 client.on("ready", () => {
-  console.log("Client is ready!");
+  console.log("✅ WhatsApp Client is ready!");
 });
 
-// Mengambil pesan dan gambar
+// Fungsi untuk buat random ID
+function generateRandomId() {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let id = "";
+  for (let i = 0; i < 20; i++) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return id;
+}
+
+// Event message listener
+// client.on("message", async (message) => {
+//   try {
+//     const chats = await client.getChats();
+//     const groups = chats.filter((chat) => chat.isGroup);
+
+//     const targetGroups = [
+//       "TIK D4 TES",
+//       "TIK TES 2",
+//       "TIK K31A",
+//       "TIK K3",
+//       "K3IB TIK",
+//       "TIK K31D",
+//       "TIK DCIB",
+//       "TIK - DCIA",
+//       "TIK DCID",
+//       "K31F TIK",
+//       "TIK - DC1A",
+//       "TIK K325-E"
+//     ];
+//     const matchedGroups = groups.filter((group) =>
+//       targetGroups.includes(group.name)
+//     );
+
+//     if (matchedGroups.length === 0) {
+//       console.log("❌ Tidak ada grup target ditemukan.");
+//       return;
+//     }
+
+//     const groupMatch = matchedGroups.find(
+//       (group) => group.id._serialized === message.from
+//     );
+//     if (!groupMatch) return;
+//     const words = message.body.trim().split(" ");
+//     if (words.length < 2) {
+//       console.log("⚠️ Format pesan salah. Gunakan: <NRP> <NAMA>");
+//       return;
+//     }
+//     const nrp = words[0];
+//     const name = words.slice(1).join(" ");
+//     let filePath = null;
+//     const contactUser = await message.getContact();
+//     if (message.hasMedia) {
+//       const media = await message.downloadMedia();
+//       filePath = path.join(__dirname, "../data/images", `${nrp}_${name}.jpg`);
+//       fs.writeFileSync(filePath, media.data, "base64");
+//       const image = await Jimp.read(filePath);
+//       const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+//       const now = new Date().toLocaleString("id-ID");
+
+//       image.print(font, 20, 20, `Nama    : ${name}`);
+//       image.print(font, 20, 50, `NRP     : ${nrp}`);
+//       image.print(font, 20, 80, `Tanggal : ${now}`);
+
+//       const logoPath = path.join(__dirname, "../asset/logoppns.png");
+//       const logo = await Jimp.read(logoPath);
+//       logo.resize(100, Jimp.AUTO);
+//       const x = image.bitmap.width - logo.bitmap.width - 20;
+//       const y = 20;
+//       image.composite(logo, x, y, {
+//         mode: Jimp.BLEND_SOURCE_OVER,
+//         opacitySource: 1,
+//         opacityDest: 1,
+//       });
+
+//       await image.writeAsync(filePath);
+
+//       await savePresensiData(
+//         name,
+//         nrp,
+//         message.body,
+//         filePath,
+//         groupMatch.name,
+//         contactUser.id._serialized
+//       );
+
+//       const mediaMsg = MessageMedia.fromFilePath(filePath);
+//       await client.sendMessage(contactUser.id._serialized, mediaMsg, {
+//         caption: `✅ Presensi berhasil! 🎉 Terima kasih kak ${name} (NRP: ${nrp}) sudah melakukan presensi. Semangat terus belajar 💪📚\n\nRandom ID: ${generateRandomId()}`,
+//       });
+//     }
+//   } catch (err) {
+//     console.error("❌ Error saat memproses pesan:", err);
+//   }
+// });
 client.on("message", async (message) => {
-   client.getChats().then(async (chats) => {
-    
-    // Filter hanya grup
+  try {
+    const chats = await client.getChats();
     const groups = chats.filter((chat) => chat.isGroup);
 
-    // Mencari grup dengan nama "KELAS_1"
-    const targetGroup = groups.find((group) => group.name === "KELAS_1");
+    const targetGroups = [
+      "TIK D4 TES",
+      "TIK TES 2",
+      "TIK K31A",
+      "TIK K3",
+      "K3IB TIK",
+      "TIK K31D",
+      "TIK DCIB",
+      "TIK - DCIA",
+      "TIK DCID",
+      "K31F TIK",
+      "TIK - DC1A",
+      "TIK K325-E",
+    ];
+    const matchedGroups = groups.filter((group) =>
+      targetGroups.includes(group.name)
+    );
 
-    if (targetGroup) {
-      console.log(
-        `Grup ditemukan: ${targetGroup.name}, ID Grup: ${targetGroup.id._serialized}`
-      );
-        if (message.from === targetGroup.id._serialized) {
-          console.log(
-            `Pesan diterima di grup ${targetGroup.name}: ${message.body}`
-          );
-
-          const words = message.body.split(" ");
-          const name = words.slice(1).join(" ")
-          const nrp = words[0]
-          let filePath = null;
-          if (message.hasMedia) {
-            const media = await message.downloadMedia();
-            filePath = path.join(
-              __dirname,
-              "../data/images",
-              `${nrp}_${name}.jpg`
-            );
-
-            // Menyimpan gambar ke folder 'data/images'
-            fs.writeFileSync(filePath, media.data, "base64");
-            console.log(`Gambar disimpan di: ${filePath}`);
-          }
-          savePresensiData(name, nrp, message.body, filePath);
-        }
-      // });
-    } else {
-      console.log('Grup "KELAS_1" tidak ditemukan.');
+    if (matchedGroups.length === 0) {
+      console.log("❌ Tidak ada grup target ditemukan.");
+      return;
     }
 
-   });
+    const groupMatch = matchedGroups.find(
+      (group) => group.id._serialized === message.from
+    );
+    if (!groupMatch) return;
+    const words = message.body.trim().split(" ");
+    if (words.length < 2) {
+      console.log("⚠️ Format pesan salah. Gunakan: <NRP> <NAMA>");
+      return;
+    }
+    const nrp = words[0];
+    const name = words.slice(1).join(" ");
+    let filePath = null;
+    // Hapus baris ini untuk menghindari error getContact
+    // const contactUser = await message.getContact();
+    // const contact = await message.getContact();
+    // const senderId = await message.getMentions();
+    //  let user = await msg.getContact();
+    // const senderNumber = senderId.split('@')[0];
+    // console.log("Pesan dari:", senderId);
+    // for (let user of mentions) {
+    //   console.log(`${user.pushname} was mentioned`);
+    // }
 
-  // if (message.isGroupMsg && message.body) {
-  //   const regex = /^(\d{10})\s(.+)$/; // Format: NRP [spasi] Nama
-  //   const match = message.body.match(regex);
+    const chat = await message.getChat();
+    // let user = await message.getContact();
+    console.log("Pesan dari:", chat);
+    // console.log("Pesan dari:", chat);
 
-  //   console.log("Received message:", message.body);
+    if (message.hasMedia) {
+      const media = await message.downloadMedia();
+      filePath = path.join(__dirname, "../data/images", `${nrp}_${name}.jpg`);
+      fs.writeFileSync(filePath, media.data, "base64");
+      const image = await Jimp.read(filePath);
+      const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+      const now = new Date().toLocaleString("id-ID");
 
-  //   if (match) {
-  //     const studentNrp = match[1];
-  //     const studentName = match[2];
+      image.print(font, 20, 20, `Nama    : ${name}`);
+      image.print(font, 20, 50, `NRP     : ${nrp}`);
+      image.print(font, 20, 80, `Tanggal : ${now}`);
 
-  //     console.log(`Nama: ${studentName}, NRP: ${studentNrp}`);
+      const logoPath = path.join(__dirname, "../asset/logoppns.png");
+      const logo = await Jimp.read(logoPath);
+      logo.resize(100, Jimp.AUTO);
+      const x = image.bitmap.width - logo.bitmap.width - 20;
+      const y = 20;
+      image.composite(logo, x, y, {
+        mode: Jimp.BLEND_SOURCE_OVER,
+        opacitySource: 1,
+        opacityDest: 1,
+      });
 
-  //     let imageUrl = null;
-  //     if (message.hasMedia) {
-  //       const media = await message.downloadMedia();
-  //       const imageFileName = `${studentNrp}_${studentName}.jpg`;
-  //       const filePath = path.join(__dirname, "../data/images", imageFileName);
+      await image.writeAsync(filePath);
 
-  //       // Menyimpan gambar ke folder 'data/images'
-  //       fs.writeFileSync(filePath, media.data, "base64");
-  //       imageUrl = `/images/${imageFileName}`; // URL gambar
+      await savePresensiData(
+        name,
+        nrp,
+        message.body,
+        filePath,
+        groupMatch.name,
+        message.author
+      );
 
-  //       console.log(`Gambar disimpan di: ${filePath}`);
-  //     }
+      console.log("✅ Presensi data berhasil disimpan untuk", message);
 
-  //     // Menyimpan data presensi ke database
-  //     savePresensiData(studentName, studentNrp, message.body, imageUrl);
-  //   } else {
-  //     console.log("Format pesan tidak sesuai.");
-  //   }
-  // }
+      const mediaMsg = MessageMedia.fromFilePath(filePath);
+      await client.sendMessage(message.author, mediaMsg, {
+        caption: `✅ Presensi berhasil! 🎉 Terima kasih kak ${name} (NRP: ${nrp}) sudah melakukan presensi. Semangat terus belajar 💪📚\n\nRandom ID: ${generateRandomId()}`,
+      });
+    }
+  } catch (err) {
+    await client.sendMessage(message.author, mediaMsg, {
+      caption: `✅ YANG BENER LAH NGISINYA \n\nRandom ID: ${generateRandomId()}`,
+    });
+    console.error("❌ Error saat memproses pesan:", err);
+  }
 });
 
-// Reset data setiap hari pada pukul 00:00
-cron.schedule("0 0 * * *", () => {
-  console.log("Resetting presensi data...");
-  db.run("DELETE FROM presensi", (err) => {
-    if (err) {
-      console.error("Error resetting database:", err);
-    } else {
-      console.log("Data presensi berhasil direset.");
-    }
-  });
+// Cron job reset data setiap hari jam 00:00
+cron.schedule("0 0 * * *", async () => {
+  console.log("⏳ Resetting presensi data...");
+  try {
+    await resetPresensiData();
+    console.log("✅ Data presensi berhasil direset.");
+  } catch (err) {
+    console.error("❌ Gagal reset database:", err);
+  }
 });
 
 // Mulai client

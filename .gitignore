@@ -29,6 +29,8 @@ presensi.db
 
 # Ignore node_modules folder
 node_modules/
+data/
 
 .wwebjs_auth/
 .wwebjs_cache/
+.vercel

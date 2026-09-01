@@ -9,6 +9,10 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
       rel="stylesheet"
     />
+    <!-- jsPDF dan autoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+
     <style>
       body {
         background-color: #f8f9fa;
@@ -30,7 +34,23 @@
   </head>
   <body>
     <div class="container">
-      <h1 class="text-center mb-4">Presensi Kelas</h1>
+      <h1 class="text-center mb-4">Presensi Kelas TIK K3</h1>
+      <button class="btn btn-danger mb-3" onclick="deleteAllPresensi()">
+        Delete All
+      </button>
+      <button class="btn btn-success mb-3" onclick="exportPdf()">
+        Export PDF
+      </button>
+
+      <select
+        id="filterKelas"
+        class="form-select mb-3"
+        onchange="filterPresensiByKelas()"
+      >
+        <option value="">-- Semua Kelas --</option>
+        <option value="TIK TES 2">TIK TES 2</option>
+        <option value="TIK D4 TES">TIK D4 TES</option>
+      </select>
 
       <table class="table table-bordered table-striped">
         <thead class="thead-dark">
@@ -38,14 +58,13 @@
             <th>No</th>
             <th>Nama</th>
             <th>NRP</th>
-            <!-- <th>Pesan</th> -->
+            <th>Kelas</th>
+            <th>Kontak</th>
             <th>Foto</th>
             <th>AKSI</th>
           </tr>
         </thead>
-        <tbody id="presensi-list">
-          <!-- Data presensi akan dimasukkan di sini -->
-        </tbody>
+        <tbody id="presensi-list"></tbody>
       </table>
     </div>
 
@@ -82,35 +101,125 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
     <script>
-      fetch("http://localhost:3000/presensi")
-        .then((response) => response.json())
-        .then((data) => {
-          const presensiList = document.getElementById("presensi-list");
-          data.forEach((presensi, index) => {
-            console.log("cek", presensi.message_text.split(" ")[1]);
-            const presensiRow = document.createElement("tr");
-            presensiRow.innerHTML = `
+      let presensiData = [];
+      let filteredPresensiData = [];
+
+      let filterDataMaster = [];
+
+      console.log("filterDataMaster", filterDataMaster);
+
+      function loadPresensi() {
+        fetch("http://localhost:3000/presensi")
+          .then((response) => response.json())
+          .then((data) => {
+            presensiData = data;
+            const presensiList = document.getElementById("presensi-list");
+            const kelasDropdown = document.getElementById("filterKelas");
+
+            // simpan pilihan sebelumnya (jika ada) supaya tidak hilang saat repopulate
+            const prevSelected = kelasDropdown ? kelasDropdown.value : "";
+
+            // hitung jumlah per kelas
+            const kelasCount = {};
+            data.forEach((p) => {
+              if (p.kelas) {
+                kelasCount[p.kelas] = (kelasCount[p.kelas] || 0) + 1;
+              }
+            });
+
+            // isi ulang dropdown (dinamis), tapi pertahankan pilihan sebelumnya
+            if (kelasDropdown) {
+              kelasDropdown.innerHTML = ""; // bersihkan dulu
+              const optAll = document.createElement("option");
+              optAll.value = "";
+              optAll.textContent = `-- Semua Kelas (${data.length}) --`;
+              if (prevSelected === "") optAll.selected = true;
+              kelasDropdown.appendChild(optAll);
+
+              const kelasSet = [
+                ...new Set(data.map((p) => p.kelas).filter(Boolean)),
+              ].sort();
+              kelasSet.forEach((k) => {
+                const opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = `${k} (${kelasCount[k]})`;
+                if (k === prevSelected) opt.selected = true; // kembalikan pilihan
+                kelasDropdown.appendChild(opt);
+              });
+
+              // pasang onchange agar saat user mengganti pilihan langsung reload dan pakai filter
+              kelasDropdown.onchange = () => loadPresensi();
+            }
+
+            // ambil nilai filter terkini (setelah repopulate)
+            const selectedKelas =
+              kelasDropdown && kelasDropdown.value !== undefined
+                ? kelasDropdown.value
+                : prevSelected;
+
+            // lakukan filter sesuai pilihan
+            let filteredData = data;
+            filteredPresensiData = filteredData;
+            if (selectedKelas) {
+              filteredData = data.filter((p) => p.kelas === selectedKelas);
+            }
+
+            filterDataMaster = filteredData;
+
+            // render countText (buat kalau belum ada)
+            let countText = document.getElementById("countText");
+            if (!countText) {
+              countText = document.createElement("p");
+              countText.id = "countText";
+              countText.className = "fw-bold";
+              // taruh countText di atas tabel (sebelum element table)
+              const container = document.querySelector(".container");
+              const table = container.querySelector("table");
+              container.insertBefore(countText, table);
+            }
+            countText.textContent = `Menampilkan ${filteredData.length} data`;
+
+            // render tabel (urutkan dulu)
+            presensiList.innerHTML = "";
+            const sortFn = (a, b) => {
+              const nrpA = (a.student_nrp || "").split(" ")[0];
+              const nrpB = (b.student_nrp || "").split(" ")[0];
+              if (!isNaN(nrpA) && !isNaN(nrpB)) {
+                return parseInt(nrpA) - parseInt(nrpB);
+              }
+              return nrpA.localeCompare(nrpB);
+            };
+
+            filteredData.sort(sortFn).forEach((presensi, index) => {
+              const presensiRow = document.createElement("tr");
+              presensiRow.innerHTML = `
             <td>${index + 1}</td>
             <td>${presensi?.student_name || ""}</td>
-            <td>${presensi?.student_nrp?.split(" ")?.[0] || ""}</td>
-            
+            <td>${presensi?.student_nrp || ""}</td>
+            <td>${presensi?.kelas || ""}</td>
+            <td>${(presensi?.contact || "").replace("@c.us", "")}</td>
             <td>
               ${
                 presensi.image_url
-                  ? `<img src="http://localhost:3000${presensi.image_url}" class="img-thumbnail" alt="Gambar Presensi" onclick="showImageModal('http://localhost:3000${presensi.image_url}')"`
+                  ? `<img src="http://localhost:3000${presensi.image_url}" 
+                      class="img-thumbnail" 
+                      alt="Gambar Presensi" 
+                      style="height:150px;object-fit:cover;cursor:pointer;"
+                      onclick="showImageModal('http://localhost:3000${presensi.image_url}')"/>`
                   : "Tidak ada gambar"
               }
             </td>
-             <td>
+            <td>
               <button class="btn btn-danger btn-sm" onclick="deletePresensi(${
                 presensi.id
               }, this)">Hapus</button>
             </td>
           `;
-            presensiList.appendChild(presensiRow);
-          });
-        })
-        .catch((err) => console.error("Error fetching data: ", err));
+              presensiList.appendChild(presensiRow);
+            });
+          })
+          .catch((err) => console.error("Error fetching data: ", err));
+      }
 
       function showImageModal(imageUrl) {
         const modalImage = document.getElementById("modalImage");
@@ -122,13 +231,10 @@
       }
 
       function deletePresensi(id, button) {
-        // Mengonfirmasi penghapusan data
         if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
-          // Mengirim permintaan DELETE ke server
           fetch(`http://localhost:3000/presensi/${id}`, { method: "DELETE" })
             .then((response) => {
               if (response.ok) {
-                // Menghapus baris data di tabel setelah berhasil dihapus
                 button.closest("tr").remove();
                 alert("Data berhasil dihapus");
               } else {
@@ -138,6 +244,173 @@
             .catch((err) => console.error("Error deleting data: ", err));
         }
       }
+
+      function deleteAllPresensi() {
+        if (confirm("Apakah Anda yakin ingin menghapus SEMUA data presensi?")) {
+          fetch("http://localhost:3000/presensi", { method: "DELETE" })
+            .then((response) => {
+              if (response.ok) {
+                document
+                  .querySelectorAll("table tbody tr")
+                  .forEach((row) => row.remove());
+                loadPresensi();
+                alert("Semua data berhasil dihapus");
+              } else {
+                alert("Gagal menghapus semua data");
+              }
+            })
+            .catch((err) => console.error("Error deleting all data: ", err));
+        }
+      }
+
+      async function exportPdf() {
+        const { jsPDF } = window.jspdf;
+        const tinggiPerBaris = 8;
+        const tinggiKonten = 30 * tinggiPerBaris;
+        const margin = 20;
+        const tinggiKertas = Math.max(210, tinggiKonten + margin);
+        const doc = new jsPDF("l", "mm", [tinggiKertas, 297]);
+        const maxRowsPerPage = 4;
+
+        doc.setFontSize(14);
+        const kelasDropdown = document.getElementById("filterKelas");
+        const prevSelected = kelasDropdown ? kelasDropdown.value : "";
+        console.log("prevSelected", prevSelected);
+        doc.text(`Laporan Presensi Kelas TIK ${prevSelected}`, 14, 15);
+        const head = [["No", "Nama", "NRP", "Kelas", "Kontak", "Foto"]];
+        // --- Preload semua gambar ke base64 lebih dulu ---
+        const preloadedData = await Promise.all(
+          filterDataMaster.map(async (p) => {
+            let base64Img = null;
+            let aspectRatio = 1;
+
+            if (p.image_url) {
+              try {
+                const imageUrl = "http://localhost:3000" + p.image_url;
+                base64Img = await toDataURL(imageUrl);
+                await new Promise((resolve) => {
+                  const img = new Image();
+                  img.src = base64Img;
+                  img.onload = () => {
+                    aspectRatio = img.width / img.height || 1;
+                    resolve();
+                  };
+                  img.onerror = () => resolve();
+                });
+              } catch (e) {
+                console.error("Gagal load gambar", p.image_url, e);
+              }
+            }
+            console.log("base64Img", base64Img);
+            return { ...p, base64Img, aspectRatio };
+          })
+        );
+
+        const chunkArray = (arr, size) => {
+          const chunks = [];
+          for (let i = 0; i < arr.length; i += size) {
+            chunks.push(arr.slice(i, i + size));
+          }
+          return chunks;
+        };
+        const pages = chunkArray(preloadedData, maxRowsPerPage);
+
+        pages.forEach((pageData, pageIndex) => {
+          if (pageIndex > 0) doc.addPage(); // Tambah halaman baru mulai dari halaman ke-2
+
+          doc.setFontSize(14);
+          doc.text(`Laporan Presensi Kelas TIK ${prevSelected}`, 14, 15);
+          doc.setFontSize(10);
+          doc.text(`Halaman ${pageIndex + 1} dari ${pages.length}`, 250, 15);
+
+          const body = pageData.map((p, i) => [
+            String(pageIndex * maxRowsPerPage + i + 1),
+            p.student_name || "-",
+            p.student_nrp || "-",
+            p.kelas || "-",
+            p.contact?.replace("@c.us", "") || "-",
+            "", // kolom foto diisi nanti
+          ]);
+
+          doc.autoTable({
+            head,
+            body,
+            startY: 25,
+            theme: "grid",
+            styles: {
+              halign: "center",
+              valign: "middle",
+              fontSize: 10,
+            },
+            headStyles: { fillColor: [41, 128, 185], halign: "center" },
+            columnStyles: {
+              0: { cellWidth: 12 },
+              1: { cellWidth: 40 },
+              2: { cellWidth: 35 },
+              3: { cellWidth: 35 },
+              4: { cellWidth: 35 },
+              5: { cellWidth: 120, minCellHeight: 50 },
+            },
+            margin: { left: 10, right: 10 },
+            didDrawCell: (data) => {
+              if (data.column.index === 5 && data.row.section === "body") {
+                const p = pageData[data.row.index];
+                if (!p) return;
+                const imgSize = 45;
+                const imgWidth = imgSize * (p.aspectRatio || 1);
+                const x = data.cell.x + (data.cell.width - imgWidth) / 2;
+                const y = data.cell.y + (data.cell.height - imgSize) / 2;
+
+                if (p.base64Img) {
+                  doc.addImage(p.base64Img, "JPEG", x, y, imgWidth, imgSize);
+                } else {
+                  doc.text("-", x + imgWidth / 2, y + imgSize / 2, {
+                    align: "center",
+                  });
+                }
+              }
+            },
+          });
+        });
+
+        doc.save(`presensi_kelas_${prevSelected}.pdf`);
+      }
+      async function toDataURL(url) {
+        try {
+          // Pastikan URL sudah di-encode dengan benar
+          const safeUrl = encodeURI(url);
+
+          // Fetch gambar dengan mode CORS dan no-cache
+          const response = await fetch(safeUrl, {
+            mode: "cors",
+            cache: "no-store",
+          });
+
+          // Jika gagal (status bukan 200 OK)
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+
+          // Ubah ke blob, lalu konversi ke base64
+          const blob = await response.blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.error("Gagal fetch toDataURL:", url, error);
+          return null; // supaya tidak menghentikan Promise.all
+        }
+      }
+
+      window.onload = () => {
+        loadPresensi();
+        setInterval(() => {
+          loadPresensi();
+        }, 10000);
+      };
     </script>
   </body>
 </html>

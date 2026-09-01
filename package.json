@@ -15,8 +15,11 @@
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "jimp-compact": "^0.16.1-2",
     "node-cron": "^4.2.1",
+    "playwright": "^1.56.0",
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^5.1.7",
     "whatsapp-web.js": "^1.33.2"
